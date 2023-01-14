@@ -1,6 +1,8 @@
 # CarMusic
 CarMusic app for easy playing music on android headunits
- 
+
+![CarMusic](https://user-images.githubusercontent.com/2833940/212468059-738bbf4a-eecd-46bf-807e-f1f50ef1a98e.png) 
+
   - Shows Title, artist, album, folder, bitrate and codec type
   - Shows fanart
   - Can switch between folders
