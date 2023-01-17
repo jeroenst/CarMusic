@@ -1,29 +1,20 @@
 package com.example.carmusic;
 
-import androidx.annotation.Nullable;
-import androidx.annotation.RequiresApi;
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.media.session.MediaButtonReceiver;
-
 import android.app.Service;
-import android.content.ContentResolver;
-import android.content.ContentUris;
 import android.content.Context;
 import android.content.Intent;
-import android.database.Cursor;
+import android.content.SharedPreferences;
 import android.graphics.BitmapFactory;
 import android.media.AudioAttributes;
+import android.media.AudioFocusRequest;
 import android.media.AudioManager;
-import android.media.MediaFormat;
 import android.media.MediaMetadataRetriever;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Binder;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Environment;
 import android.os.IBinder;
-import android.provider.MediaStore;
 import android.support.v4.media.session.MediaSessionCompat;
 import android.support.v4.media.session.PlaybackStateCompat;
 import android.util.Log;
@@ -31,11 +22,25 @@ import android.view.View;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.TextView;
+
+import androidx.annotation.Nullable;
+import androidx.annotation.RequiresApi;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.media.session.MediaButtonReceiver;
+
 import java.io.File;
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
+
+import com.google.android.exoplayer2.ExoPlayer;
+import com.google.android.exoplayer2.MediaItem;
+import com.google.android.exoplayer2.extractor.DefaultExtractorsFactory;
+import com.google.android.exoplayer2.source.MediaSource;
+import com.google.android.exoplayer2.upstream.DataSpec;
+import com.google.android.exoplayer2.extractor.DefaultExtractorsFactory;
+import com.google.android.exoplayer2.extractor.ExtractorsFactory;
+import com.google.android.exoplayer2.source.MediaSource;
 
 
 public class MainActivity extends AppCompatActivity {
@@ -49,6 +54,133 @@ public class MainActivity extends AppCompatActivity {
     private static Boolean isPaused = false;
     private static String extension = "";
     private static Integer mediaIndex = 0;
+    private static Context context;
+    private static String errorMessage;
+    private static ExoPlayer exoPlayer;
+
+    public static void mediaControl(MediaControlAction mediaControlAction) {
+        if (fileList.size() > 0) {
+            // Select song to play
+            if (mediaControlAction == MediaControlAction.next) {
+                if (++mediaIndex >= fileList.size()) mediaIndex = 0;
+            }
+
+            if (mediaControlAction == MediaControlAction.previous) {
+                if (--mediaIndex < 0) mediaIndex = fileList.size() - 1;
+            }
+
+            if (mediaControlAction == MediaControlAction.nextfolder) {
+                String currentfolder = fileList.get(mediaIndex).getParent();
+                String foundfolder = currentfolder;
+                int oldmediaindex = mediaIndex;
+                // Set mediaIndex to the first song of the next folder
+                while (currentfolder.equals(foundfolder)) {
+                    if (++mediaIndex >= fileList.size()) mediaIndex = 0;
+                    currentfolder = fileList.get(mediaIndex).getParent();
+                    if (oldmediaindex == mediaIndex) break;
+                }
+            }
+
+            if (mediaControlAction == MediaControlAction.previousfolder) {
+                String currentFolder = fileList.get(mediaIndex).getParent();
+                String foundFolder = currentFolder;
+                int oldMediaIndex = mediaIndex;
+                // Set mediaIndex to the last song of previous folder
+                while (currentFolder.equals(foundFolder)) {
+                    if (--mediaIndex < 0) mediaIndex = fileList.size() - 1;
+                    currentFolder = fileList.get(mediaIndex).getParent();
+                    if (oldMediaIndex == mediaIndex) break;
+                }
+                // Set mediaIndex to the last song of the folder before the previous folder
+                while (currentFolder.equals(foundFolder)) {
+                    if (--mediaIndex < 0) mediaIndex = fileList.size() - 1;
+                    currentFolder = fileList.get(mediaIndex).getParent();
+                    if (oldMediaIndex == mediaIndex) break;
+                }
+                // Set mediaIndex to the fist song of previous folder
+                if (++mediaIndex >= fileList.size()) mediaIndex = 0;
+            }
+
+
+            errorMessage = "";
+            try {
+                if ((mediaControlAction == MediaControlAction.pause) ||
+                    (exoPlayer.isPlaying() && mediaControlAction == MediaControlAction.play))
+                {
+                    if (exoPlayer.isPlaying()) exoPlayer.pause();
+                    isPaused = true;
+                    mButtonPlayPause.setImageResource(android.R.drawable.ic_media_play);
+                }
+                else if (isPaused && mediaControlAction == MediaControlAction.play){
+                    exoPlayer.play();
+                    isPaused = false;
+                    mButtonPlayPause.setImageResource(android.R.drawable.ic_media_pause);
+                }
+                else {
+                    exoPlayer.stop();
+                    // Build the media item.
+                    MediaItem mediaItem = MediaItem.fromUri(Uri.parse(fileList.get(mediaIndex).toString()));
+                    // Set the media item to be played.
+                    exoPlayer.setMediaItem(mediaItem);
+                    // Prepare the player.
+                    exoPlayer.prepare();
+                    // Start the playback.
+                    exoPlayer.play();
+                    isPaused = false;
+                    mButtonPlayPause.setImageResource(android.R.drawable.ic_media_pause);
+                }
+            } catch (Exception e){
+            Log.e("CarAudio", e.getMessage() != null ? e.getMessage() : "Unknown Exception");
+            Log.e("CarAudio", e.getStackTrace().toString());
+            errorMessage = e.getMessage() != null ? e.getMessage() : "Unknown Exception";
+            }
+
+            // Show music details
+            try {
+                MediaMetadataRetriever metaRetriever = new MediaMetadataRetriever();
+                metaRetriever.setDataSource(fileList.get(mediaIndex).toString());
+                String artist = metaRetriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST);
+                String title = metaRetriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE);
+                String album = metaRetriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM);
+                String path = new File(fileList.get(mediaIndex).getParent()).toString();
+                String filename = new File(fileList.get(mediaIndex).getName()).toString();
+                filename = filename.substring(filename.lastIndexOf("/") + 1);
+
+                path = path.replace("/sdcard/Music", "");
+                path = path.replace("/storage/extsd/Music", "");
+                path = path.replace("/", "");
+
+                if (path == null) path = "";
+                String bitrate = String.valueOf(Integer.parseInt(metaRetriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE)) / 1000);
+                int i = fileList.get(mediaIndex).toString().lastIndexOf('.');
+                if (i > 0) extension = fileList.get(mediaIndex).toString().substring(i + 1);
+                if (artist == null) artist = "";
+                if (title == null) title = filename;
+                if (album == null) album = "";
+                mTextView.setText(artist + "\n" + title + "\n" + album + "\n" + path + "\n" + bitrate + "kbps " + extension);
+                if (errorMessage != "") mTextView.setText(errorMessage);
+
+            } catch (Exception e) {
+                Log.e("CarAudio", e.getStackTrace().toString());
+            }
+
+            // Show fanart
+            try {
+                MediaMetadataRetriever metaRetriever = new MediaMetadataRetriever();
+                metaRetriever.setDataSource(fileList.get(mediaIndex).toString());
+                byte[] image = metaRetriever.getEmbeddedPicture();
+                if (BitmapFactory.decodeByteArray(image, 0, image.length) != null)
+                    mImageView.setImageBitmap(BitmapFactory.decodeByteArray(image, 0, image.length));
+            } catch (Exception e) {
+                mImageView.setImageResource(R.drawable.speaker);
+            }
+
+            SharedPreferences sharedPref = context.getSharedPreferences("preferences", Context.MODE_PRIVATE);
+            SharedPreferences.Editor editor = sharedPref.edit();
+            editor.putInt("mediaIndex", mediaIndex);
+            editor.apply();
+        }
+    }
 
     public List<File> addFiles(List<File> files, File dir) {
         if (files == null)
@@ -58,12 +190,11 @@ public class MainActivity extends AppCompatActivity {
         Boolean issymlink = false;
         try {
 //            dir = dir.getCanonicalFile();
+        } catch (Exception e) {
         }
-        catch (Exception e)
-        {}
 
 
-        Log.d("CarMusic", "Found file:"+dir.toString());
+        Log.d("CarMusic", "Found file:" + dir.toString());
 
         if (!dir.isDirectory() && (!issymlink)) {
             String extension = "";
@@ -76,8 +207,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         File[] dirfiles = dir.listFiles();
-        if (dirfiles != null)
-        {
+        if (dirfiles != null) {
             Arrays.sort(dirfiles);
             for (File file : dirfiles) {
                 addFiles(files, file);
@@ -92,6 +222,7 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         setVolumeControlStream(AudioManager.STREAM_MUSIC);
+        context = this;
 
         mTextView = (TextView) findViewById(R.id.textView);
         mTextView.setText("Scanning\nFolders");
@@ -101,29 +232,17 @@ public class MainActivity extends AppCompatActivity {
 
         mButtonPlayPause = (ImageButton) findViewById(R.id.buttonPlayPause);
 
-
         dir = new File("/sdcard/Music");
-        fileList= addFiles(fileList, dir);
+        fileList = addFiles(fileList, dir);
         dir = new File("/storage/extsd/Music");
-        fileList= addFiles(fileList, dir);
+        fileList = addFiles(fileList, dir);
 
+        SharedPreferences sharedPref = context.getSharedPreferences("preferences",Context.MODE_PRIVATE);
+        mediaIndex = sharedPref.getInt("mediaIndex", 0);
+
+        exoPlayer = new ExoPlayer.Builder(context).build();
         mediaControl(MediaControlAction.play);
-
-        //AudioManager audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-        //audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 20, 0);
     }
-
-
-    enum MediaControlAction {
-        stop,
-        play,
-        pause,
-        next,
-        previous,
-        nextfolder,
-        previousfolder
-    }
-
 
     /**
      * Called when the user touches the on screen button
@@ -148,163 +267,26 @@ public class MainActivity extends AppCompatActivity {
         mediaControl(MediaControlAction.previousfolder);
     }
 
-    public static void mediaControl(MediaControlAction mediaControlAction) {
-        if (mPlayer == null)
-        {
-            mPlayer = new MediaPlayer();
-
-            mPlayer.setOnErrorListener(new MediaPlayer.OnErrorListener() {
-                @Override
-                public boolean onError(MediaPlayer mediaPlayer, int i, int i1) {
-                        mTextView.setText("ERROR what:"+ String.valueOf(i) + "  extra:"+String.valueOf(i1));
-                    return false;
-                }
-            });
-
-            mPlayer.setOnInfoListener(new MediaPlayer.OnInfoListener() {
-                @Override
-                public boolean onInfo(MediaPlayer mediaPlayer, int i, int i1) {
-                    mTextView.setText("INFO what:"+ String.valueOf(i)  +"  extra:"+String.valueOf(i1));
-                    return false;
-                }
-            });
-
-            mPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
-                @Override
-                public void onCompletion(MediaPlayer mp) {
-                    Log.d("CarAudio", "onComplete, mediaPlayer.isPlaying() returns " + mPlayer.isPlaying());
-                    mediaControl(MediaControlAction.next);
-                }
-            });
-
-            mPlayer.setAudioAttributes(
-                    new AudioAttributes.Builder()
-                            .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                            .setUsage(AudioAttributes.USAGE_MEDIA)
-                            .build()
-            );
-        }
-
-        if (fileList.size() > 0) {
-            if (mediaControlAction == MediaControlAction.next) {
-                if (++mediaIndex >= fileList.size()) mediaIndex = 0;
-            }
-
-            if (mediaControlAction == MediaControlAction.previous) {
-                if (--mediaIndex < 0) mediaIndex = fileList.size() - 1;
-            }
-
-            if (mediaControlAction == MediaControlAction.nextfolder) {
-                String currentfolder = fileList.get(mediaIndex).getParent();
-                String foundfolder = currentfolder;
-                int oldmediaindex = mediaIndex;
-                while (currentfolder.equals(foundfolder)) {
-                    if (++mediaIndex >= fileList.size()) mediaIndex = 0;
-                    currentfolder = fileList.get(mediaIndex).getParent();
-                    if (oldmediaindex == mediaIndex) break;
-                }
-            }
-
-            if (mediaControlAction == MediaControlAction.previousfolder) {
-                String currentfolder = fileList.get(mediaIndex).getParent();
-                String foundfolder = currentfolder;
-                int oldmediaindex = mediaIndex;
-                while (currentfolder.equals(foundfolder)) {
-                    if (--mediaIndex < 0) mediaIndex = fileList.size() - 1;
-                    currentfolder = fileList.get(mediaIndex).getParent();
-                    if (oldmediaindex == mediaIndex) break;
-                }
-            }
-
-            String errormessage = "";
-            try {
-             if (mPlayer.isPlaying() && (mediaControlAction == MediaControlAction.play || mediaControlAction == MediaControlAction.pause)) {
-                    mPlayer.pause();
-                    isPaused = true;
-                    mButtonPlayPause.setImageResource(android.R.drawable.ic_media_play);
-                } else if ((mediaControlAction != MediaControlAction.pause) && (mediaControlAction != MediaControlAction.stop)) {
-                    if (!(mediaControlAction == MediaControlAction.play && isPaused))
-                    {
-                        mPlayer.stop();
-                        mPlayer.reset();
-                        mPlayer.setDataSource(fileList.get(mediaIndex).toString());
-                        mPlayer.prepare();
-                    }
-                    isPaused = false;
-                    mPlayer.start();
-                    mButtonPlayPause.setImageResource(android.R.drawable.ic_media_pause);
-                } else if (mediaControlAction == MediaControlAction.stop)
-                {
-                    mPlayer.stop();
-                    mPlayer.release();
-                    mPlayer = null;
-                }
-            } catch (Exception e) {
-                Log.e("CarAudio", e.getMessage() != null ? e.getMessage() : "Unknown Exception");
-                Log.e("CarAudio", e.getStackTrace().toString());
-            }
-
-            try {
-                MediaMetadataRetriever metaRetriever = new MediaMetadataRetriever();
-                metaRetriever.setDataSource(fileList.get(mediaIndex).toString());
-                String artist = metaRetriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST);
-                String title = metaRetriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE);
-                String album = metaRetriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM);
-                String path = new File(fileList.get(mediaIndex).getParent()).toString();
-                String filename = new File(fileList.get(mediaIndex).getName()).toString();
-                filename=filename.substring(filename.lastIndexOf("/")+1);
-
-                path = path.replace("/sdcard/Music", "");
-                path = path.replace("/storage/extsd/Music", "");
-                path = path.replace("/", "");
-
-                if (path == null) path = "";
-                String bitrate = String.valueOf(Integer.parseInt(metaRetriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE)) / 1000);
-                int i = fileList.get(mediaIndex).toString().lastIndexOf('.');
-                if (i > 0) extension = fileList.get(mediaIndex).toString().substring(i + 1);
-                if (artist == null) artist = "";
-                if (title == null) title = filename;
-                if (album == null) album = "";
-                mTextView.setText(artist + "\n" + title + "\n" + album + "\n" + path + "\n" + bitrate + "kbps " + extension);
-                if (errormessage != "") mTextView.setText(errormessage);
-
-            } catch (Exception e) {
-                Log.e("CarAudio", e.getStackTrace().toString());
-            }
-            try {
-                MediaMetadataRetriever metaRetriever = new MediaMetadataRetriever();
-                metaRetriever.setDataSource(fileList.get(mediaIndex).toString());
-                byte[] image = metaRetriever.getEmbeddedPicture();
-                if (BitmapFactory.decodeByteArray(image, 0, image.length) != null)
-                    mImageView.setImageBitmap(BitmapFactory.decodeByteArray(image, 0, image.length));
-            } catch (Exception e) {
-                mImageView.setImageResource(R.drawable.speaker);
-            }
-
-        }
+    enum MediaControlAction {
+        stop,
+        play,
+        pause,
+        next,
+        previous,
+        nextfolder,
+        previousfolder
     }
-
 }
 
 class service extends Service {
 
-    public class LocalBinder extends Binder {
-        public service getService() {
-            return service.this;
-        }
-    }
-
-
-    public static int NOTIFICATION_ID = 1;
     public static final String CHANNEL_ID = "flutter_media_notification";
     public static final String MEDIA_SESSION_TAG = "flutter_media_notification";
-
     public static final String ACTION_PLAY = "PLAY";
     public static final String ACTION_PAUSE = "PAUSE";
     public static final String ACTION_PLAY_PAUSE = "PLAY_PAUSE";
     public static final String ACTION_REWIND = "REWIND";
     public static final String ACTION_FAST_FORWARD = "FAST_FORWARD";
-
     private static final long ALWAYS_AVAILABLE_PLAYBACK_ACTIONS
             = PlaybackStateCompat.ACTION_PLAY_PAUSE
             | PlaybackStateCompat.ACTION_REWIND
@@ -312,6 +294,7 @@ class service extends Service {
             | PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS
             | PlaybackStateCompat.ACTION_SKIP_TO_NEXT
             | PlaybackStateCompat.ACTION_STOP;
+    public static int NOTIFICATION_ID = 1;
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -349,6 +332,12 @@ class service extends Service {
     @Override
     public IBinder onBind(Intent intent) {
         return null;
+    }
+
+    public class LocalBinder extends Binder {
+        public service getService() {
+            return service.this;
+        }
     }
 }
 
