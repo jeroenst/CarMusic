@@ -5,7 +5,6 @@ import android.content.SharedPreferences;
 import android.graphics.BitmapFactory;
 import android.media.AudioManager;
 import android.media.MediaMetadataRetriever;
-import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -34,7 +33,6 @@ import com.google.android.exoplayer2.Player;
 public class MainActivity extends AppCompatActivity implements Player.Listener {
 
     private static List<File> fileList = null;
-    private static MediaPlayer mPlayer;
     private static TextView mTextView;
     private static ImageView mImageView;
     private static ImageButton mButtonPlayPause;
@@ -45,8 +43,6 @@ public class MainActivity extends AppCompatActivity implements Player.Listener {
     private static Context context;
     private static String errorMessage;
     private static ExoPlayer mExoPlayer;
-    private static MediaSessionCompat mMediaSession;
-    private PlaybackStateCompat.Builder mStateBuilder;
 
     @Override
     public boolean onKeyLongPress(int keyCode, KeyEvent event) {
