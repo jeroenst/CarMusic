@@ -1,6 +1,7 @@
 package com.example.carmusic;
 
 import android.app.Service;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -10,22 +11,29 @@ import android.media.AudioFocusRequest;
 import android.media.AudioManager;
 import android.media.MediaMetadataRetriever;
 import android.media.MediaPlayer;
+import android.media.metrics.PlaybackStateEvent;
 import android.net.Uri;
 import android.os.Binder;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
+import android.os.Message;
+import android.support.v4.media.session.MediaControllerCompat;
 import android.support.v4.media.session.MediaSessionCompat;
 import android.support.v4.media.session.PlaybackStateCompat;
 import android.util.Log;
+import android.view.KeyEvent;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.ImageButton;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.media.MediaSessionManager;
 import androidx.media.session.MediaButtonReceiver;
 
 import java.io.File;
@@ -35,15 +43,31 @@ import java.util.List;
 
 import com.google.android.exoplayer2.ExoPlayer;
 import com.google.android.exoplayer2.MediaItem;
+import com.google.android.exoplayer2.Player;
 import com.google.android.exoplayer2.extractor.DefaultExtractorsFactory;
 import com.google.android.exoplayer2.source.MediaSource;
 import com.google.android.exoplayer2.upstream.DataSpec;
 import com.google.android.exoplayer2.extractor.DefaultExtractorsFactory;
 import com.google.android.exoplayer2.extractor.ExtractorsFactory;
 import com.google.android.exoplayer2.source.MediaSource;
+import com.google.android.exoplayer2.DefaultLoadControl;
+import com.google.android.exoplayer2.ExoPlaybackException;
+import com.google.android.exoplayer2.ExoPlayer;
+import com.google.android.exoplayer2.LoadControl;
+import com.google.android.exoplayer2.PlaybackParameters;
+import com.google.android.exoplayer2.Player;
+import com.google.android.exoplayer2.SimpleExoPlayer;
+import com.google.android.exoplayer2.Timeline;
+import com.google.android.exoplayer2.extractor.DefaultExtractorsFactory;
+import com.google.android.exoplayer2.source.MediaSource;
+import com.google.android.exoplayer2.source.TrackGroupArray;
+import com.google.android.exoplayer2.trackselection.DefaultTrackSelector;
+import com.google.android.exoplayer2.trackselection.TrackSelectionArray;
+import com.google.android.exoplayer2.trackselection.TrackSelector;
+import com.google.android.exoplayer2.upstream.DefaultDataSourceFactory;
+import com.google.android.exoplayer2.util.Util;
 
-
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements Player.Listener {
 
     private static List<File> fileList = null;
     private static MediaPlayer mPlayer;
@@ -56,9 +80,67 @@ public class MainActivity extends AppCompatActivity {
     private static Integer mediaIndex = 0;
     private static Context context;
     private static String errorMessage;
-    private static ExoPlayer exoPlayer;
+    private static ExoPlayer mExoPlayer;
+    private static MediaSessionCompat mMediaSession;
+    private PlaybackStateCompat.Builder mStateBuilder;
 
-    public static void mediaControl(MediaControlAction mediaControlAction) {
+    @Override
+    public boolean onKeyLongPress(int keyCode, KeyEvent event) {
+        if (keyCode == KeyEvent.KEYCODE_MEDIA_NEXT)
+        {
+            mediaControl(MediaControlAction.nextfolder);
+            return true;
+        }
+        if (keyCode == KeyEvent.KEYCODE_MEDIA_PREVIOUS)
+        {
+            mediaControl(MediaControlAction.previousfolder);
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public boolean onKeyUp(int keyCode, KeyEvent event) {
+        if (event.isShiftPressed() || event.isShiftPressed() || event.isCtrlPressed() || event.isFunctionPressed() || event.isLongPress()
+        || event.getDownTime() != event.getEventTime())
+        {
+            if (keyCode == KeyEvent.KEYCODE_MEDIA_NEXT)
+            {
+                mediaControl(MediaControlAction.nextfolder);
+                return true;
+            }
+            if (keyCode == KeyEvent.KEYCODE_MEDIA_PREVIOUS)
+            {
+                mediaControl(MediaControlAction.previousfolder);
+                return true;
+            }
+        }
+
+        if (keyCode == KeyEvent.KEYCODE_MEDIA_NEXT)
+        {
+            mediaControl(MediaControlAction.next);
+            return true;
+        }
+        if (keyCode == KeyEvent.KEYCODE_MEDIA_PREVIOUS)
+        {
+            mediaControl(MediaControlAction.previous);
+            return true;
+        }
+        if (keyCode == KeyEvent.KEYCODE_MEDIA_PLAY)
+        {
+            mediaControl(MediaControlAction.play);
+            return true;
+        }
+        if (keyCode == KeyEvent.KEYCODE_MEDIA_PAUSE)
+        {
+            mediaControl(MediaControlAction.pause);
+            return true;
+        }
+        return super.onKeyDown(keyCode, event);
+    }
+
+
+        public static void mediaControl(MediaControlAction mediaControlAction) {
         if (fileList.size() > 0) {
             // Select song to play
             if (mediaControlAction == MediaControlAction.next) {
@@ -91,6 +173,7 @@ public class MainActivity extends AppCompatActivity {
                     currentFolder = fileList.get(mediaIndex).getParent();
                     if (oldMediaIndex == mediaIndex) break;
                 }
+                foundFolder = currentFolder;
                 // Set mediaIndex to the last song of the folder before the previous folder
                 while (currentFolder.equals(foundFolder)) {
                     if (--mediaIndex < 0) mediaIndex = fileList.size() - 1;
@@ -105,27 +188,27 @@ public class MainActivity extends AppCompatActivity {
             errorMessage = "";
             try {
                 if ((mediaControlAction == MediaControlAction.pause) ||
-                    (exoPlayer.isPlaying() && mediaControlAction == MediaControlAction.play))
+                    (mExoPlayer.isPlaying() && mediaControlAction == MediaControlAction.play))
                 {
-                    if (exoPlayer.isPlaying()) exoPlayer.pause();
+                    if (mExoPlayer.isPlaying()) mExoPlayer.pause();
                     isPaused = true;
                     mButtonPlayPause.setImageResource(android.R.drawable.ic_media_play);
                 }
                 else if (isPaused && mediaControlAction == MediaControlAction.play){
-                    exoPlayer.play();
+                    mExoPlayer.play();
                     isPaused = false;
                     mButtonPlayPause.setImageResource(android.R.drawable.ic_media_pause);
                 }
                 else {
-                    exoPlayer.stop();
+                    mExoPlayer.stop();
                     // Build the media item.
                     MediaItem mediaItem = MediaItem.fromUri(Uri.parse(fileList.get(mediaIndex).toString()));
                     // Set the media item to be played.
-                    exoPlayer.setMediaItem(mediaItem);
+                    mExoPlayer.setMediaItem(mediaItem);
                     // Prepare the player.
-                    exoPlayer.prepare();
+                    mExoPlayer.prepare();
                     // Start the playback.
-                    exoPlayer.play();
+                    mExoPlayer.play();
                     isPaused = false;
                     mButtonPlayPause.setImageResource(android.R.drawable.ic_media_pause);
                 }
@@ -171,8 +254,28 @@ public class MainActivity extends AppCompatActivity {
                 byte[] image = metaRetriever.getEmbeddedPicture();
                 if (BitmapFactory.decodeByteArray(image, 0, image.length) != null)
                     mImageView.setImageBitmap(BitmapFactory.decodeByteArray(image, 0, image.length));
+                LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                        0, LinearLayout.LayoutParams.MATCH_PARENT);
+                params.weight = 1;
+                params.leftMargin = 50;
+                mImageView.setLayoutParams(params);
+                params = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.MATCH_PARENT);
+                params.weight = 2;
+                mTextView.setLayoutParams(params);
+                mImageView.setEnabled(true);
             } catch (Exception e) {
-                mImageView.setImageResource(R.drawable.speaker);
+                //mImageView.setImageResource(R.drawable.speaker);
+                LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                        0, 0);
+                params.weight = 0;
+                mImageView.setLayoutParams(params);
+                params = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.MATCH_PARENT);
+                params.weight = 3;
+                mTextView.setLayoutParams(params);
+                mImageView.setEnabled(false);
+                mImageView.setActivated(false);
             }
 
             SharedPreferences sharedPref = context.getSharedPreferences("preferences", Context.MODE_PRIVATE);
@@ -232,6 +335,22 @@ public class MainActivity extends AppCompatActivity {
 
         mButtonPlayPause = (ImageButton) findViewById(R.id.buttonPlayPause);
 
+        mMediaSession = new MediaSessionCompat(this, this.getClass().getSimpleName());
+        // Do not let MediaButtons restart the player when the app is not visible.
+        mMediaSession.setMediaButtonReceiver(null);
+
+        mStateBuilder = new PlaybackStateCompat.Builder().setActions(
+                PlaybackStateCompat.ACTION_PLAY |
+                        PlaybackStateCompat.ACTION_PAUSE |
+                        PlaybackStateCompat.ACTION_PLAY_PAUSE |
+                        PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS |
+                        PlaybackStateCompat.ACTION_SKIP_TO_NEXT);
+
+        mMediaSession.setPlaybackState(mStateBuilder.build());
+
+        mMediaSession.setCallback(new MySessionCallback());
+        mMediaSession.setActive(true);
+
         dir = new File("/sdcard/Music");
         fileList = addFiles(fileList, dir);
         dir = new File("/storage/extsd/Music");
@@ -240,7 +359,7 @@ public class MainActivity extends AppCompatActivity {
         SharedPreferences sharedPref = context.getSharedPreferences("preferences",Context.MODE_PRIVATE);
         mediaIndex = sharedPref.getInt("mediaIndex", 0);
 
-        exoPlayer = new ExoPlayer.Builder(context).build();
+        mExoPlayer = new ExoPlayer.Builder(context).build();
         mediaControl(MediaControlAction.play);
     }
 
@@ -276,69 +395,46 @@ public class MainActivity extends AppCompatActivity {
         nextfolder,
         previousfolder
     }
-}
 
-class service extends Service {
+    /**
+     * Broadcast Receiver registered to receive the MEDIA_BUTTON intent coming from clients
+     */
 
-    public static final String CHANNEL_ID = "flutter_media_notification";
-    public static final String MEDIA_SESSION_TAG = "flutter_media_notification";
-    public static final String ACTION_PLAY = "PLAY";
-    public static final String ACTION_PAUSE = "PAUSE";
-    public static final String ACTION_PLAY_PAUSE = "PLAY_PAUSE";
-    public static final String ACTION_REWIND = "REWIND";
-    public static final String ACTION_FAST_FORWARD = "FAST_FORWARD";
-    private static final long ALWAYS_AVAILABLE_PLAYBACK_ACTIONS
-            = PlaybackStateCompat.ACTION_PLAY_PAUSE
-            | PlaybackStateCompat.ACTION_REWIND
-            | PlaybackStateCompat.ACTION_FAST_FORWARD
-            | PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS
-            | PlaybackStateCompat.ACTION_SKIP_TO_NEXT
-            | PlaybackStateCompat.ACTION_STOP;
-    public static int NOTIFICATION_ID = 1;
+    public static class MediaReceiver extends BroadcastReceiver {
 
-    @Override
-    public int onStartCommand(Intent intent, int flags, int startId) {
-        Log.d("CarAudio", "onStartCommand() " + intent);
-        MediaSessionCompat mediaSession = new MediaSessionCompat(this, MEDIA_SESSION_TAG);
-        if (intent != null) {
-            if (Intent.ACTION_MEDIA_BUTTON.equals(intent.getAction())) {
-                // `MediaButtonReceiver` may use `Context.startForegroundService(Intent)`,
-                // so we *have* to call `startForeground(...)`
-                // or the app will crash during service shutdown
-
-                //setForegroundAndNotification(true);
-            }
-
-            MediaButtonReceiver.handleIntent(mediaSession, intent);
-
-            String action = intent.getAction();
-            if (ACTION_PLAY.equals(action)) {
-                MainActivity.mediaControl(MainActivity.MediaControlAction.play);
-            } else if (ACTION_PAUSE.equals(action)) {
-                MainActivity.mediaControl(MainActivity.MediaControlAction.pause);
-            } else if (ACTION_PLAY_PAUSE.equals(action)) {
-                MainActivity.mediaControl(MainActivity.MediaControlAction.play);
-            } else if (ACTION_REWIND.equals(action)) {
-                MainActivity.mediaControl(MainActivity.MediaControlAction.previous);
-            } else if (ACTION_FAST_FORWARD.equals(action)) {
-                MainActivity.mediaControl(MainActivity.MediaControlAction.next);
-            }
+        public MediaReceiver() {
         }
 
-        return super.onStartCommand(intent, flags, startId);
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            MediaButtonReceiver.handleIntent(mMediaSession, intent);
+        }
     }
 
-    @Nullable
-    @Override
-    public IBinder onBind(Intent intent) {
-        return null;
-    }
+    /**
+     * Media Session Callbacks, where all external clients control the player.
+     */
 
-    public class LocalBinder extends Binder {
-        public service getService() {
-            return service.this;
+    private class MySessionCallback extends MediaSessionCompat.Callback {
+        @Override
+        public void onPlay() {
+      //      mediaControl(MediaControlAction.play);
+        }
+
+        @Override
+        public void onPause() {
+    //        mediaControl(MediaControlAction.pause);
+        }
+
+        @Override
+        public void onSkipToPrevious() {
+  //          mediaControl(MediaControlAction.next);
+        }
+
+        @Override
+        public void onSkipToNext() {
+//            mediaControl(MediaControlAction.previous);
         }
     }
 }
-
 
