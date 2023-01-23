@@ -1,8 +1,6 @@
 package com.example.carmusic;
 
-import android.content.BroadcastReceiver;
 import android.content.Context;
-import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.BitmapFactory;
 import android.media.AudioManager;
@@ -23,7 +21,6 @@ import android.widget.TextView;
 
 import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.media.session.MediaButtonReceiver;
 
 import java.io.File;
 import java.util.Arrays;
