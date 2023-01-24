@@ -1,6 +1,8 @@
 package com.example.carmusic;
 
+import android.app.Application;
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.BitmapFactory;
 import android.media.AudioManager;
@@ -8,6 +10,7 @@ import android.media.MediaMetadataRetriever;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.CountDownTimer;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
@@ -16,14 +19,17 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.lifecycle.LifecycleOwner;
 
 import java.io.File;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 
+import com.google.android.exoplayer2.ExoPlaybackException;
 import com.google.android.exoplayer2.ExoPlayer;
 import com.google.android.exoplayer2.MediaItem;
 import com.google.android.exoplayer2.Player;
@@ -38,11 +44,13 @@ public class MainActivity extends AppCompatActivity implements Player.Listener {
     private static Boolean isPaused = false;
     private static String extension = "";
     private static Integer mediaIndex = 0;
+    private static Long mediaPosition = 0L;
     private static Context context;
     private static String errorMessage;
-    private static ExoPlayer mExoPlayer;
+    private static ExoPlayer mExoPlayer = null;
+    private static String mediaInfo = "";
 
-    @Override
+/*    @Override
     public boolean onKeyLongPress(int keyCode, KeyEvent event) {
         if (keyCode == KeyEvent.KEYCODE_MEDIA_NEXT)
         {
@@ -56,6 +64,7 @@ public class MainActivity extends AppCompatActivity implements Player.Listener {
         }
         return false;
     }
+*/
 
     @Override
     public boolean onKeyUp(int keyCode, KeyEvent event) {
@@ -94,19 +103,21 @@ public class MainActivity extends AppCompatActivity implements Player.Listener {
             mediaControl(MediaControlAction.pause);
             return true;
         }
-        return super.onKeyDown(keyCode, event);
+        return super.onKeyUp(keyCode, event);
     }
 
 
-        public static void mediaControl(MediaControlAction mediaControlAction) {
+        public void mediaControl(MediaControlAction mediaControlAction) {
         if (fileList.size() > 0) {
             // Select song to play
             if (mediaControlAction == MediaControlAction.next) {
                 if (++mediaIndex >= fileList.size()) mediaIndex = 0;
+                mediaPosition = 0L;
             }
 
             if (mediaControlAction == MediaControlAction.previous) {
                 if (--mediaIndex < 0) mediaIndex = fileList.size() - 1;
+                mediaPosition = 0L;
             }
 
             if (mediaControlAction == MediaControlAction.nextfolder) {
@@ -119,6 +130,7 @@ public class MainActivity extends AppCompatActivity implements Player.Listener {
                     currentfolder = fileList.get(mediaIndex).getParent();
                     if (oldmediaindex == mediaIndex) break;
                 }
+                mediaPosition = 0L;
             }
 
             if (mediaControlAction == MediaControlAction.previousfolder) {
@@ -140,6 +152,7 @@ public class MainActivity extends AppCompatActivity implements Player.Listener {
                 }
                 // Set mediaIndex to the fist song of previous folder
                 if (++mediaIndex >= fileList.size()) mediaIndex = 0;
+                mediaPosition = 0L;
             }
 
 
@@ -153,6 +166,9 @@ public class MainActivity extends AppCompatActivity implements Player.Listener {
                     mButtonPlayPause.setImageResource(android.R.drawable.ic_media_play);
                 }
                 else if (isPaused && mediaControlAction == MediaControlAction.play){
+                    // If player was restarted go to latest position
+                    if (mediaPosition > 0L) mExoPlayer.seekTo(mediaPosition);
+                    mediaPosition = 0L;
                     mExoPlayer.play();
                     isPaused = false;
                     mButtonPlayPause.setImageResource(android.R.drawable.ic_media_pause);
@@ -165,6 +181,9 @@ public class MainActivity extends AppCompatActivity implements Player.Listener {
                     mExoPlayer.setMediaItem(mediaItem);
                     // Prepare the player.
                     mExoPlayer.prepare();
+                    // If player was restarted go to latest position
+                    if (mediaPosition > 0L) mExoPlayer.seekTo(mediaPosition);
+                    mediaPosition = 0L;
                     // Start the playback.
                     mExoPlayer.play();
                     isPaused = false;
@@ -194,13 +213,22 @@ public class MainActivity extends AppCompatActivity implements Player.Listener {
                 if (path == null) path = "";
                 String bitrate = String.valueOf(Integer.parseInt(metaRetriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE)) / 1000);
                 int i = fileList.get(mediaIndex).toString().lastIndexOf('.');
-                if (i > 0) extension = fileList.get(mediaIndex).toString().substring(i + 1);
+                if (i > 0) extension = fileList.get(mediaIndex).toString().substring(i + 1).toUpperCase();
                 if (artist == null) artist = "";
                 if (title == null) title = filename;
                 if (album == null) album = "";
-                mTextView.setText(artist + "\n" + title + "\n" + album + "\n" + path + "\n" + bitrate + "kbps " + extension);
+                mediaInfo = artist + "\n" + title + "\n" + album + "\n" + path + "\n" + bitrate + "kbps " + extension + "\n";
+                updateTime();
                 if (errorMessage != "") mTextView.setText(errorMessage);
 
+                Intent intent = new Intent();
+                intent.setAction("com.android.music.metachanged");
+                intent.putExtra("track", title);
+                intent.putExtra("artist", artist);
+                intent.putExtra("album", album);
+                intent.putExtra("playing", true);
+                intent.putExtra("package", "com.example.caraudio");
+                sendBroadcast(intent);
             } catch (Exception e) {
                 Log.e("CarAudio", e.getStackTrace().toString());
             }
@@ -212,33 +240,37 @@ public class MainActivity extends AppCompatActivity implements Player.Listener {
                 byte[] image = metaRetriever.getEmbeddedPicture();
                 if (BitmapFactory.decodeByteArray(image, 0, image.length) != null)
                     mImageView.setImageBitmap(BitmapFactory.decodeByteArray(image, 0, image.length));
-                LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+    /*            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
                         0, LinearLayout.LayoutParams.MATCH_PARENT);
                 params.weight = 1;
-                params.leftMargin = 50;
+                params.leftMargin = 15;
+                params.topMargin = 50;
+                params.bottomMargin = 50;
+                params.rightMargin = 15;
                 mImageView.setLayoutParams(params);
+
                 params = new LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.MATCH_PARENT);
                 params.weight = 2;
-                mTextView.setLayoutParams(params);
-                mImageView.setEnabled(true);
+                mTextView.setLayoutParams(params);*/
             } catch (Exception e) {
-                //mImageView.setImageResource(R.drawable.speaker);
-                LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                mImageView.setImageResource(R.drawable.speaker);
+                /*LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
                         0, 0);
                 params.weight = 0;
                 mImageView.setLayoutParams(params);
+
                 params = new LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.MATCH_PARENT);
                 params.weight = 3;
-                mTextView.setLayoutParams(params);
-                mImageView.setEnabled(false);
-                mImageView.setActivated(false);
+                mTextView.setLayoutParams(params);*/
             }
+
 
             SharedPreferences sharedPref = context.getSharedPreferences("preferences", Context.MODE_PRIVATE);
             SharedPreferences.Editor editor = sharedPref.edit();
             editor.putInt("mediaIndex", mediaIndex);
+            editor.putLong("mediaPosition", mExoPlayer.getCurrentPosition());
             editor.apply();
         }
     }
@@ -248,16 +280,7 @@ public class MainActivity extends AppCompatActivity implements Player.Listener {
             files = new LinkedList<File>();
 
 
-        Boolean issymlink = false;
-        try {
-//            dir = dir.getCanonicalFile();
-        } catch (Exception e) {
-        }
-
-
-        Log.d("CarMusic", "Found file:" + dir.toString());
-
-        if (!dir.isDirectory() && (!issymlink)) {
+        if (!dir.isDirectory()) {
             String extension = "";
             int i = dir.toString().lastIndexOf('.');
             if (i > 0) extension = dir.toString().substring(i + 1);
@@ -300,9 +323,95 @@ public class MainActivity extends AppCompatActivity implements Player.Listener {
 
         SharedPreferences sharedPref = context.getSharedPreferences("preferences",Context.MODE_PRIVATE);
         mediaIndex = sharedPref.getInt("mediaIndex", 0);
+        mediaPosition = sharedPref.getLong("mediaPosition", 0);
 
-        mExoPlayer = new ExoPlayer.Builder(context).build();
+        if (mExoPlayer == null)
+        {
+            mExoPlayer = new ExoPlayer.Builder(context).build();
+        }
         mediaControl(MediaControlAction.play);
+
+
+        mExoPlayer.addListener(new Player.Listener() {
+            @Override
+            public void onPlaybackStateChanged(@Player.State int state) {
+                if (state == Player.STATE_ENDED) {
+                        mediaControl(MediaControlAction.next);
+                }
+            }
+        });
+
+
+        new CountDownTimer(Long.MAX_VALUE, 1000) {
+
+            public void onTick(long millisUntilFinished) {
+                updateTime();
+                // For now save state every 10 seconds until we find a option to save on destroy
+                if ((millisUntilFinished/1000) % 10 == 0) saveState();
+            }
+
+            public void onFinish() {
+            }
+
+        }.start();
+    }
+
+
+    public void updateTime() {
+        if (mExoPlayer.getDuration() > 0) {
+            mediaPosition = mExoPlayer.getCurrentPosition();
+            Long mediaDuration = mExoPlayer.getDuration();
+
+            Long mediaPositionHour = mediaPosition / 3600000;
+            Long mediaPositionMin = (mediaPosition / 60000) % 60;
+            Long mediaPositionSec = (mediaPosition / 1000) % 60;
+
+            String mediaPositionSecStr = (mediaPositionSec < 10 ? "0" : "") + mediaPositionSec;
+            String mediaPositionMinStr = (mediaPositionMin < 10 ? "0" : "") + mediaPositionMin;
+
+            Long mediaDurationHour = mediaDuration / 3600000;
+            Long mediaDurationMin = (mediaDuration / 60000) % 60;
+            Long mediaDurationSec = (mediaDuration /1000) % 60;
+
+            String mediaDurationSecStr = (mediaDurationSec < 10 ? "0" : "") + mediaDurationSec;
+            String mediaDurationMinStr = (mediaDurationMin < 10 ? "0" : "") + mediaDurationMin;
+
+            String time = (mediaPositionHour > 0 ? mediaPositionHour + ":" + mediaPositionMinStr : ""+ mediaPositionMin) + ":" + mediaPositionSecStr;
+            time += " / " + (mediaDurationHour  > 0 ? mediaDurationHour + ":" + mediaDurationMinStr : "" + mediaDurationMin)  + ":" + mediaDurationSecStr;
+            mTextView.setText(mediaInfo + time);
+        } else
+        {
+            mediaPosition = 0L;
+            mTextView.setText(mediaInfo + " ");
+        }
+    }
+
+    public void saveState()
+    {
+        SharedPreferences sharedPref = context.getSharedPreferences("preferences", Context.MODE_PRIVATE);
+        SharedPreferences.Editor editor = sharedPref.edit();
+        editor.putInt("mediaIndex", mediaIndex);
+        editor.putLong("mediaPosition", mediaPosition);
+        editor.apply();
+        editor.commit();
+    }
+
+    @Override
+    protected void onPause(){
+        saveState();
+        super.onPause();
+    }
+
+    @Override
+    protected void onStop(){
+        saveState();
+        super.onStop();
+    }
+
+    @Override
+    protected void onDestroy(){
+        saveState();
+        super.onDestroy();
     }
 
     /**
@@ -322,7 +431,7 @@ public class MainActivity extends AppCompatActivity implements Player.Listener {
 
     public void mediaNextFolder(View view) {
         mediaControl(MediaControlAction.nextfolder);
-    }
+        }
 
     public void mediaPreviousFolder(View view) {
         mediaControl(MediaControlAction.previousfolder);
