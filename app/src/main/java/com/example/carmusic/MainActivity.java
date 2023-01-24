@@ -190,9 +190,9 @@ public class MainActivity extends AppCompatActivity implements Player.Listener {
                     mButtonPlayPause.setImageResource(android.R.drawable.ic_media_pause);
                 }
             } catch (Exception e){
-            Log.e("CarAudio", e.getMessage() != null ? e.getMessage() : "Unknown Exception");
-            Log.e("CarAudio", e.getStackTrace().toString());
-            errorMessage = e.getMessage() != null ? e.getMessage() : "Unknown Exception";
+                Log.e("CarAudio", e.getMessage() != null ? e.getMessage() : "Unknown Exception");
+                Log.e("CarAudio", e.getStackTrace().toString());
+                errorMessage = e.getMessage() != null ? e.getMessage() : "Unknown Exception";
             }
 
             // Show music details
@@ -219,7 +219,6 @@ public class MainActivity extends AppCompatActivity implements Player.Listener {
                 if (album == null) album = "";
                 mediaInfo = artist + "\n" + title + "\n" + album + "\n" + path + "\n" + bitrate + "kbps " + extension + "\n";
                 updateTime();
-                if (errorMessage != "") mTextView.setText(errorMessage);
 
                 Intent intent = new Intent();
                 intent.setAction("com.android.music.metachanged");
@@ -231,6 +230,7 @@ public class MainActivity extends AppCompatActivity implements Player.Listener {
                 sendBroadcast(intent);
             } catch (Exception e) {
                 Log.e("CarAudio", e.getStackTrace().toString());
+                mediaInfo = "File error";
             }
 
             // Show fanart
@@ -240,30 +240,8 @@ public class MainActivity extends AppCompatActivity implements Player.Listener {
                 byte[] image = metaRetriever.getEmbeddedPicture();
                 if (BitmapFactory.decodeByteArray(image, 0, image.length) != null)
                     mImageView.setImageBitmap(BitmapFactory.decodeByteArray(image, 0, image.length));
-    /*            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                        0, LinearLayout.LayoutParams.MATCH_PARENT);
-                params.weight = 1;
-                params.leftMargin = 15;
-                params.topMargin = 50;
-                params.bottomMargin = 50;
-                params.rightMargin = 15;
-                mImageView.setLayoutParams(params);
-
-                params = new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.MATCH_PARENT);
-                params.weight = 2;
-                mTextView.setLayoutParams(params);*/
             } catch (Exception e) {
                 mImageView.setImageResource(R.drawable.speaker);
-                /*LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                        0, 0);
-                params.weight = 0;
-                mImageView.setLayoutParams(params);
-
-                params = new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.MATCH_PARENT);
-                params.weight = 3;
-                mTextView.setLayoutParams(params);*/
             }
 
 
