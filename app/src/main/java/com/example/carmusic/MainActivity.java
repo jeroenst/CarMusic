@@ -328,8 +328,8 @@ public class MainActivity extends AppCompatActivity implements Player.Listener {
         if (mExoPlayer == null)
         {
             mExoPlayer = new ExoPlayer.Builder(context).build();
+            mediaControl(MediaControlAction.play);
         }
-        mediaControl(MediaControlAction.play);
 
 
         mExoPlayer.addListener(new Player.Listener() {
