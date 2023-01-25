@@ -16,3 +16,4 @@ Features/bugfixes to be added:
   - Stop playing when other app starts playing audio
   - Set text/button color to match car interior
   
+Unfortunatly this app won't be available on the playstore because Google charges $25 to be a developer which is mandatory for publishing apps on the playstore.
