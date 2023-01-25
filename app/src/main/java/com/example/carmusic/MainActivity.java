@@ -1,6 +1,8 @@
 package com.example.carmusic;
 
 import android.app.Application;
+import android.app.NotificationManager;
+import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -8,12 +10,15 @@ import android.graphics.BitmapFactory;
 import android.media.AudioManager;
 import android.media.MediaMetadataRetriever;
 import android.net.Uri;
+import android.os.Binder;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.CountDownTimer;
+import android.os.IBinder;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
+import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -39,7 +44,7 @@ public class MainActivity extends AppCompatActivity implements Player.Listener {
     private static List<File> fileList = null;
     private static TextView mTextView;
     private static ImageView mImageView;
-    private static ImageButton mButtonPlayPause;
+    private static Button mButtonPlayPause;
     private static File dir;
     private static Boolean isPaused = false;
     private static String extension = "";
@@ -49,22 +54,6 @@ public class MainActivity extends AppCompatActivity implements Player.Listener {
     private static String errorMessage;
     private static ExoPlayer mExoPlayer = null;
     private static String mediaInfo = "";
-
-/*    @Override
-    public boolean onKeyLongPress(int keyCode, KeyEvent event) {
-        if (keyCode == KeyEvent.KEYCODE_MEDIA_NEXT)
-        {
-            mediaControl(MediaControlAction.nextfolder);
-            return true;
-        }
-        if (keyCode == KeyEvent.KEYCODE_MEDIA_PREVIOUS)
-        {
-            mediaControl(MediaControlAction.previousfolder);
-            return true;
-        }
-        return false;
-    }
-*/
 
     @Override
     public boolean onKeyUp(int keyCode, KeyEvent event) {
@@ -163,7 +152,7 @@ public class MainActivity extends AppCompatActivity implements Player.Listener {
                 {
                     if (mExoPlayer.isPlaying()) mExoPlayer.pause();
                     isPaused = true;
-                    mButtonPlayPause.setImageResource(android.R.drawable.ic_media_play);
+                    mButtonPlayPause.setText("\uf04b");
                 }
                 else if (isPaused && mediaControlAction == MediaControlAction.play){
                     // If player was restarted go to latest position
@@ -171,7 +160,7 @@ public class MainActivity extends AppCompatActivity implements Player.Listener {
                     mediaPosition = 0L;
                     mExoPlayer.play();
                     isPaused = false;
-                    mButtonPlayPause.setImageResource(android.R.drawable.ic_media_pause);
+                    mButtonPlayPause.setText("\uf04c");
                 }
                 else {
                     mExoPlayer.stop();
@@ -187,7 +176,7 @@ public class MainActivity extends AppCompatActivity implements Player.Listener {
                     // Start the playback.
                     mExoPlayer.play();
                     isPaused = false;
-                    mButtonPlayPause.setImageResource(android.R.drawable.ic_media_pause);
+                    mButtonPlayPause.setText("\uf04c");
                 }
             } catch (Exception e){
                 Log.e("CarAudio", e.getMessage() != null ? e.getMessage() : "Unknown Exception");
@@ -286,13 +275,16 @@ public class MainActivity extends AppCompatActivity implements Player.Listener {
         setVolumeControlStream(AudioManager.STREAM_MUSIC);
         context = this;
 
+        Intent intent = new Intent(this, CarMusicService.class);
+        startService(intent);
+
         mTextView = (TextView) findViewById(R.id.textView);
         mTextView.setText("Scanning\nFolders");
 
         mImageView = (ImageView) findViewById(R.id.imageView);
         mImageView.setImageResource(R.drawable.speaker);
 
-        mButtonPlayPause = (ImageButton) findViewById(R.id.buttonPlayPause);
+        mButtonPlayPause = (Button) findViewById(R.id.buttonPlayPause);
 
         dir = new File("/sdcard/Music");
         fileList = addFiles(fileList, dir);
@@ -425,4 +417,5 @@ public class MainActivity extends AppCompatActivity implements Player.Listener {
         previousfolder
     }
 }
+
 

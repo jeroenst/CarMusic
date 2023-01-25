@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">CarMusic</string>
+    <string name="play">\uf04b</string>
+    <string name="pause">\uf04c</string>
 </resources>

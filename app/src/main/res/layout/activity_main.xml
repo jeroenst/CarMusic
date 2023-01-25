@@ -10,6 +10,9 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:layout_marginLeft="10dp"
+        android:layout_marginRight="10dp"
+        android:layout_marginBottom="10dp"
         android:orientation="vertical"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
@@ -18,6 +21,7 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="match_parent"
+            android:layout_marginRight="5dp"
             android:layout_weight="1"
             android:orientation="horizontal"
             android:weightSum="3">
@@ -27,7 +31,6 @@
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
                 android:layout_gravity="center"
-                android:layout_marginLeft="5dp"
                 android:layout_marginTop="50dp"
                 android:layout_marginBottom="50dp"
                 android:layout_weight="1"
@@ -52,59 +55,79 @@
             android:layout_height="80dp"
             android:baselineAligned="false"
             android:gravity="center_horizontal|center_vertical"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:weightSum="5">
 
-            <ImageButton
+            <Button
                 android:id="@+id/buttonPreviousFolder"
                 android:layout_width="wrap_content"
                 android:layout_height="100dp"
-                android:layout_marginLeft="5dp"
-                android:layout_marginRight="5dp"
+                android:layout_marginLeft="2dp"
+                android:layout_marginRight="2dp"
                 android:layout_weight="1"
                 android:background="@color/button_background"
+                android:fontFamily="@font/font_awesome_solid"
                 android:onClick="mediaPreviousFolder"
-                android:src="@android:drawable/ic_media_rew" />
+                android:text="\uf049"
+                android:textColor="@color/red"
+                android:textSize="34sp" />
 
-            <ImageButton
-                android:id="@+id/buttonPreviousFile"
+            <Button
+                android:id="@+id/buttonPrevious"
                 android:layout_width="wrap_content"
                 android:layout_height="100dp"
-                android:layout_marginRight="5dp"
+                android:layout_marginLeft="2dp"
+                android:layout_marginRight="2dp"
                 android:layout_weight="1"
                 android:background="@color/button_background"
+                android:fontFamily="@font/font_awesome_solid"
                 android:onClick="mediaPrevious"
-                android:src="@android:drawable/ic_media_previous" />
+                android:text="\uf048"
+                android:textColor="@color/red"
+                android:textSize="34sp" />
 
-            <ImageButton
+            <Button
                 android:id="@+id/buttonPlayPause"
                 android:layout_width="wrap_content"
                 android:layout_height="100dp"
-                android:layout_marginRight="5dp"
+                android:layout_marginLeft="2dp"
+                android:layout_marginRight="2dp"
                 android:layout_weight="1"
                 android:background="@color/button_background"
+                android:fontFamily="@font/font_awesome_solid"
                 android:onClick="mediaStartPause"
-                android:src="@android:drawable/ic_media_play"
-                app:iconGravity="textStart" />
+                android:text="\uf04b"
+                android:textColor="@color/red"
+                android:textSize="34sp" />
 
-            <ImageButton
-                android:id="@+id/buttonNextFile"
+            <Button
+                android:id="@+id/buttonNext"
                 android:layout_width="wrap_content"
                 android:layout_height="100dp"
-                android:layout_marginRight="5dp"
+                android:layout_marginLeft="2dp"
+                android:layout_marginRight="2dp"
                 android:layout_weight="1"
                 android:background="@color/button_background"
+                android:fontFamily="@font/font_awesome_solid"
                 android:onClick="mediaNext"
-                android:src="@android:drawable/ic_media_next" />
+                android:text="\uf051"
+                android:textColor="@color/red"
+                android:textSize="34sp" />
 
-            <ImageButton
+            <Button
                 android:id="@+id/buttonNextFolder"
                 android:layout_width="wrap_content"
                 android:layout_height="100dp"
-                android:layout_marginRight="5dp"
+                android:layout_marginLeft="2dp"
+                android:layout_marginRight="2dp"
                 android:layout_weight="1"
                 android:background="@color/button_background"
+                android:fontFamily="@font/font_awesome_solid"
                 android:onClick="mediaNextFolder"
-                android:src="@android:drawable/ic_media_ff" />
+                android:text="\uf050"
+                android:textColor="@color/red"
+                android:textSize="34sp" />
+
         </LinearLayout>
 
     </LinearLayout>
