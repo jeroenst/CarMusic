@@ -45,48 +45,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private boolean updateImage = true;
     private Long mediaPosition = 0L;
     private Long mediaDuration = 0L;
-
-    @Override
-    public boolean onKeyUp(int keyCode, KeyEvent event) {
-        if (event.isShiftPressed() || event.isShiftPressed() || event.isCtrlPressed() || event.isFunctionPressed() || event.isLongPress()
-        || event.getDownTime() != event.getEventTime())
-        {
-            if (keyCode == KeyEvent.KEYCODE_MEDIA_NEXT)
-            {
-                mCarAudioService.mediaControl(CarMusicService.MediaControlAction.nextfolder);
-                return true;
-            }
-            if (keyCode == KeyEvent.KEYCODE_MEDIA_PREVIOUS)
-            {
-                mCarAudioService.mediaControl(CarMusicService.MediaControlAction.previousfolder);
-                return true;
-            }
-        }
-
-        if (keyCode == KeyEvent.KEYCODE_MEDIA_NEXT)
-        {
-            mCarAudioService.mediaControl(CarMusicService.MediaControlAction.next);
-            return true;
-        }
-        if (keyCode == KeyEvent.KEYCODE_MEDIA_PREVIOUS)
-        {
-            mCarAudioService.mediaControl(CarMusicService.MediaControlAction.previous);
-            return true;
-        }
-        if (keyCode == KeyEvent.KEYCODE_MEDIA_PLAY)
-        {
-            mCarAudioService.mediaControl(CarMusicService.MediaControlAction.play);
-            return true;
-        }
-        if (keyCode == KeyEvent.KEYCODE_MEDIA_PAUSE)
-        {
-            mCarAudioService.mediaControl(CarMusicService.MediaControlAction.pause);
-            return true;
-        }
-        return super.onKeyUp(keyCode, event);
-    }
-
-
     /**
      * Create our connection to the service to be used in our bindService call.
      */
@@ -119,7 +77,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         bindService(intent, mConnection, Context.BIND_AUTO_CREATE);
         startService(intent);
 
-
         mTextView = (TextView) findViewById(R.id.textView);
         mTextView.setText("Scanning\nFolders");
 
@@ -127,9 +84,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         mImageView.setImageResource(R.drawable.speaker);
 
         mButtonPlayPause = (Button) findViewById(R.id.buttonPlayPause);
-
-
-
     }
 
     /**
