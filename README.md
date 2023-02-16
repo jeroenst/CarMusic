@@ -11,8 +11,7 @@ CarMusic app for easy playing music on android headunits
 Audio files need to be in /sdcard/Music or in /storage/extsd/Music
 
 Features/bugfixes to be added:
-  - Respond to steering wheel buttons
   - Stop playing when other app starts playing audio
-  - Set text/button color to match car interior
+  - Do not start new player when frontend is restarted
   
 Unfortunatly this app won't be available on the playstore because Google charges $25 to be a developer which is mandatory for publishing apps on the playstore.
