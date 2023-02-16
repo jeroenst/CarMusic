@@ -1,9 +1,11 @@
 # CarMusic
-CarMusic app for easy playing music on android headunits
 
 ![image](https://user-images.githubusercontent.com/2833940/215039582-3c28b4b5-43f8-42d8-81ea-b84a6c3670a1.png)
 
-  - Shows Title, artist, album, folder, bitrate and codec type
+
+CarMusic app for easy playing music on android headunits
+
+- Shows Title, artist, album, folder, bitrate and codec type
   - Shows fanart
   - Can switch between folders
   - Scans folders recursively
@@ -11,12 +13,12 @@ CarMusic app for easy playing music on android headunits
  
 At this moment audio files need to be in /sdcard/Music or in /storage/extsd/Music
 
-Bugdfixes to be implemented:
+## Bugfixes to be implemented
   - Stop playing when other app starts playing audio
   - Do not start new player when frontend is restarted
 
   
-Wishlist:
+## Wishlist
   - Select folders to be scanned for music files by user
   - Open list of folders and files (or titles) to directly select item to play
   - Broadcast title and artist to Agamma Launcher
