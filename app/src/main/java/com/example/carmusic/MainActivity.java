@@ -1,5 +1,6 @@
 package com.example.carmusic;
 
+import android.app.ActivityManager;
 import android.app.Application;
 import android.app.NotificationManager;
 import android.app.Service;
@@ -19,6 +20,7 @@ import android.os.CountDownTimer;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.telecom.ConnectionService;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
@@ -45,23 +47,25 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private boolean updateImage = true;
     private Long mediaPosition = 0L;
     private Long mediaDuration = 0L;
+
     /**
      * Create our connection to the service to be used in our bindService call.
      */
     private final ServiceConnection mConnection = new ServiceConnection() {
-        public void onServiceConnected(ComponentName className, IBinder service) {
+        public void onServiceConnected(ComponentName className, IBinder iBinder) {
             //We expect the service binder to be the main services binder.
             //As such we cast.
-            if (service instanceof CarMusicService.MainServiceBinder) {
-                final CarMusicService.MainServiceBinder myService = (CarMusicService.MainServiceBinder) service;
-                //Then we simply set the exoplayer instance on this view.
-                mExoPlayer = myService.getExoPlayerInstance();
-                //Then we simply set the exoplayer instance on this view.
-                mCarAudioService = myService.getInstance();
-            }
+
+            CarMusicService.MainServiceBinder binder = (CarMusicService.MainServiceBinder) iBinder;
+            CarMusicService service = binder.getService();
+            mExoPlayer = service.getExoPlayerInstance();
+            mCarAudioService = service.getCarMusicInstance();
         }
 
         public void onServiceDisconnected(ComponentName className) {
+            Log.e(TAG, "Service has unexpectedly disconnected");
+            mExoPlayer = null;
+            mCarAudioService = null;
         }
     };
 
@@ -72,10 +76,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         setContentView(R.layout.activity_main);
         setVolumeControlStream(AudioManager.STREAM_MUSIC);
         context = this;
-
-        Intent intent = new Intent(this, CarMusicService.class);
-        bindService(intent, mConnection, Context.BIND_AUTO_CREATE);
-        startService(intent);
 
         mTextView = (TextView) findViewById(R.id.textView);
         mTextView.setText("Scanning\nFolders");
@@ -129,11 +129,23 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     }
 
     @Override
+    public void onBackPressed()
+    {
+        mCarAudioService.shutDown();
+        stopService(new Intent(this, CarMusicService.class));
+        super.onBackPressed();
+    }
+
+    @Override
     protected void onStart() {
         Log.d(TAG, "onStart()");
+
         super.onStart();
+
         Intent intent = new Intent(this, CarMusicService.class);
+        startService(intent);
         bindService(intent, mConnection, Context.BIND_AUTO_CREATE);
+
 
         // For now we poll de service every 100ms. Later we can use a callback or receive
         // a broadcast message
@@ -145,9 +157,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
             public void onFinish() {
             }
-
         }.start();
-
     }
 
     public void updateTime() {

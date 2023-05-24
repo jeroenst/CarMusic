@@ -1,13 +1,20 @@
 package com.example.carmusic;
 
+import android.app.Notification;
+import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.app.Service;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.graphics.Color;
 import android.media.MediaMetadataRetriever;
+import android.os.Build;
+import android.os.Parcel;
+import android.os.Parcelable;
 import android.support.v4.media.session.MediaSessionCompat;
 
 import android.net.Uri;
@@ -29,9 +36,18 @@ import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 
+import static android.media.session.PlaybackState.ACTION_FAST_FORWARD;
+import static android.media.session.PlaybackState.ACTION_PAUSE;
+import static android.media.session.PlaybackState.ACTION_PLAY;
+import static android.media.session.PlaybackState.ACTION_REWIND;
+import static android.media.session.PlaybackState.ACTION_SKIP_TO_NEXT;
+import static android.media.session.PlaybackState.ACTION_SKIP_TO_PREVIOUS;
 
 
-public class CarMusicService extends android.app.Service {
+public class CarMusicService extends Service {
+    public CarMusicService() {
+    }
+
     enum MediaControlAction {
         stop,
         play,
@@ -41,7 +57,6 @@ public class CarMusicService extends android.app.Service {
         nextfolder,
         previousfolder
     }
-
 
     private PlaybackStateCompat playbackState;
     private MediaSessionConnector mediaSessionConnector;
@@ -58,30 +73,20 @@ public class CarMusicService extends android.app.Service {
     private Integer mediaIndex = 0;
     private Long mediaPosition = 0L;
     private Context context;
+    private Boolean shutDown = false;
     private byte[] image = null;
-
+    private final IBinder mainServiceBinder = new MainServiceBinder();
 
     // Unique Identification Number for the Notification.
     // We use it on Notification start, and to cancel it.
     private int NOTIFICATION = 483838;
 
-    /**
-     * Class for clients to access.  Because we know this service always
-     * runs in the same process as its clients, we don't need to deal with
-     * IPC.
-     */
-    public class LocalBinder extends Binder {
-        CarMusicService getService() {
-            return CarMusicService.this;
-        }
-    }
-
     @Override
     public void onCreate() {
+        super.onCreate();
         mNM = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-        // Display a notification about us starting.  We put an icon in the status bar.
-          //    showNotification();
 
+        showNotification();
         context = this;
 
         boolean startPlaying = false;
@@ -112,10 +117,6 @@ public class CarMusicService extends android.app.Service {
         mediaSession.setCallback(mediaSessionCallbackCompat);
         mediaSession.setActive(true);
 
-//        mediaSessionConnector = new MediaSessionConnector(mediaSession);
-        //mediaSessionConnector.setPlayer(mExoPlayer);
-
-
         SharedPreferences sharedPref = this.getSharedPreferences("preferences", Context.MODE_PRIVATE);
         mediaIndex = sharedPref.getInt("mediaIndex", 0);
         mediaPosition = sharedPref.getLong("mediaPosition", 0);
@@ -131,9 +132,10 @@ public class CarMusicService extends android.app.Service {
             }
         });
 
-        new CountDownTimer(Long.MAX_VALUE, 10000) {
+        new CountDownTimer(Long.MAX_VALUE, 1000) {
 
             public void onTick(long millisUntilFinished) {
+                mediaPosition = mExoPlayer.getCurrentPosition();
                 // For now save state every 10 seconds until we find a option to save on destroy
                 if ((millisUntilFinished / 1000) % 10 == 0) saveState();
             }
@@ -142,11 +144,6 @@ public class CarMusicService extends android.app.Service {
             }
 
         }.start();
-    }
-
-    @Override
-    public int onStartCommand(Intent intent, int flags, int startId) {
-        Log.i("CarAudioService", "onStartCommand() id " + startId + ": " + intent);
 
         IntentFilter filter = new IntentFilter();
         filter.addAction("android.media.VOLUME_CHANGED_ACTION");
@@ -154,15 +151,24 @@ public class CarMusicService extends android.app.Service {
         filter.addAction("android.intent.action.MEDIA_BUTTON");
         registerReceiver(this.broadcastReceiver, filter);
 
+    }
+
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        Log.i("CarAudioService", "onStartCommand() id " + startId + ": " + intent);
+
         MediaButtonReceiver.handleIntent(mediaSession, intent);
 
-        return super.onStartCommand(intent, flags, startId);
+        context = this;
+
+        //return super.onStartCommand(intent, flags, startId);
+        return START_NOT_STICKY;
     }
 
     @Override
     public IBinder onBind(Intent intent) {
         Log.i("CarAudioService", "onBind() intent " + intent);
-        return new MainServiceBinder();
+        return mainServiceBinder;
     }
 
     public List<File> addFiles(List<File> files, File dir) {
@@ -247,7 +253,6 @@ public class CarMusicService extends android.app.Service {
                 } else if (isPaused && mediaControlAction == MediaControlAction.play) {
                     // If player was restarted go to latest position
                     if (mediaPosition > 0L) mExoPlayer.seekTo(mediaPosition);
-                    mediaPosition = 0L;
                     mExoPlayer.play();
                     isPaused = false;
                 } else {
@@ -260,7 +265,6 @@ public class CarMusicService extends android.app.Service {
                     mExoPlayer.prepare();
                     // If player was restarted go to latest position
                     if (mediaPosition > 0L) mExoPlayer.seekTo(mediaPosition);
-                    mediaPosition = 0L;
                     // Start the playback.
                     mExoPlayer.play();
                     isPaused = false;
@@ -336,11 +340,32 @@ public class CarMusicService extends android.app.Service {
 
     @Override
     public void onDestroy() {
+        Log.d("CarMusicService", "onDestroy()...");
+        saveState();
+        if (shutDown)
+        {
+            mExoPlayer.stop();
+            mExoPlayer.release();
+            super.onDestroy();
+        }
+        else
+        {
         Intent in = new Intent();
         in.setAction("YouWillNeverKillMe");
         sendBroadcast(in);
-        Log.d("CarMusicService", "onDestroy()...");
+        }
+
+    }
+
+    public ExoPlayer getExoPlayerInstance() {
+        return mExoPlayer;
+    }
+
+    public void shutDown()
+    {
+        shutDown = true;
         saveState();
+        this.onDestroy();
     }
 
     private class MediaSessionCallbackCompat extends MediaSessionCompat.Callback {
@@ -398,16 +423,12 @@ public class CarMusicService extends android.app.Service {
          * If exoplayer's internal are altered or accessed we can not guarantee
          * things will work correctly.
          */
-        ExoPlayer getExoPlayerInstance() {
-            return mExoPlayer;
-        }
-
-        CarMusicService getInstance() {
-            return getCarMusicInstance();
+        public CarMusicService getService() {
+            return CarMusicService.this;
         }
     }
 
-    private CarMusicService getCarMusicInstance() {
+    public CarMusicService getCarMusicInstance() {
         return this;
     }
 
@@ -435,9 +456,67 @@ public class CarMusicService extends android.app.Service {
             if (Intent.ACTION_MEDIA_BUTTON.equals(intent.getAction())) {
                 int command = intent.getIntExtra("android.intent.action.MEDIA_BUTTON",0);
                 Log.i("CarMusicService", "command = " + command);
+                if (command == ACTION_PLAY) mediaControl(MediaControlAction.play);
+                if (command == ACTION_PAUSE) mediaControl(MediaControlAction.pause);
+                if (command == ACTION_SKIP_TO_NEXT) mediaControl(MediaControlAction.next);
+                if (command == ACTION_SKIP_TO_PREVIOUS) mediaControl(MediaControlAction.previous);
+                if (command == ACTION_FAST_FORWARD) mediaControl(MediaControlAction.nextfolder);
+                if (command == ACTION_REWIND) mediaControl(MediaControlAction.previousfolder);
             }
             Log.i ("CarMusicService", "Received Broadcast:" + intent.getAction());
         }
     };
-}
 
+    /**
+     * Show a notification while this service is running.
+     */
+    private void showNotification() {
+        // In this sample, we'll use the same text for the ticker and the expanded notification
+        CharSequence text = "CarMusic";
+
+        // The PendingIntent to launch our activity if the user selects this notification
+        PendingIntent contentIntent = PendingIntent.getActivity(this, 0,
+                new Intent(this, CarMusicService.class), 0);
+
+        String CHANNEL_ID = "CarMusic";
+
+        Notification notification;
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            CharSequence name = "CarMusic_Channel";
+            String Description = "CarMusic";
+            int importance = NotificationManager.IMPORTANCE_LOW;
+            NotificationChannel mChannel = new NotificationChannel(CHANNEL_ID, name, importance);
+            mChannel.setDescription(Description);
+            mChannel.enableLights(false);
+            mChannel.setLightColor(Color.RED);
+            mChannel.enableVibration(false);
+            mChannel.setShowBadge(false);
+            mNM.createNotificationChannel(mChannel);
+
+
+            // Set the info for the views that show in the notification panel.
+            notification = new Notification.Builder(this, CHANNEL_ID)
+                    .setSmallIcon(R.drawable.speaker)  // the status icon
+                    .setTicker(text)  // the status text
+                    .setWhen(System.currentTimeMillis())  // the time stamp
+                    .setContentTitle("CarMusic")  // the label of the entry
+                    .setContentText(text)  // the contents of the entry
+                    .setContentIntent(contentIntent)  // The intent to send when the entry is clicked
+                    .build();
+        }
+        else {
+            // Set the info for the views that show in the notification panel.
+            notification = new Notification.Builder(this)
+                    .setSmallIcon(R.drawable.speaker)  // the status icon
+                    .setTicker(text)  // the status text
+                    .setWhen(System.currentTimeMillis())  // the time stamp
+                    .setContentTitle("CarMusic")  // the label of the entry
+                    .setContentText(text)  // the contents of the entry
+                    .setContentIntent(contentIntent)  // The intent to send when the entry is clicked
+                    .build();
+        }
+
+        // Send the notification.
+        mNM.notify(NOTIFICATION, notification);
+    }
+}
