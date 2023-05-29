@@ -11,8 +11,9 @@ CarMusic app for easy playing music on android headunits
  
 Audio files need to be in /sdcard/Music or in /storage/extsd/Music
 
-Features/bugfixes to be added:
+Features to be added:
   - Stop playing when other app starts playing audio
   - Set text/button color to match car interior
+  - Choose folders (now hardcoded to /sdcard/Music and storage/extsd/Music)
   
 Unfortunatly this app won't be available on the playstore because Google charges $25 to be a developer which is mandatory for publishing apps on the playstore.
