@@ -22,15 +22,6 @@
         </activity>
 
         <service android:name=".CarMusicService" android:exported="true" android:enabled="true" android:process=":carMusic">
-            <intent-filter>
-                <action android:name="android.intent.action.MEDIA_BUTTON" />
-            </intent-filter>
         </service>
-
-        <receiver android:name="androidx.media.session.MediaButtonReceiver" android:exported="true" android:enabled="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MEDIA_BUTTON" />
-            </intent-filter>
-        </receiver>
     </application>
 </manifest>

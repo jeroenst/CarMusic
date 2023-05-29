@@ -10,11 +10,16 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.graphics.BitmapFactory;
 import android.graphics.Color;
+import android.media.MediaMetadata;
 import android.media.MediaMetadataRetriever;
+import android.media.MediaSession2;
+import android.media.session.MediaSession;
 import android.os.Build;
 import android.os.Parcel;
 import android.os.Parcelable;
+import android.support.v4.media.MediaMetadataCompat;
 import android.support.v4.media.session.MediaSessionCompat;
 
 import android.net.Uri;
@@ -23,8 +28,10 @@ import android.os.CountDownTimer;
 import android.os.IBinder;
 import android.support.v4.media.session.PlaybackStateCompat;
 import android.util.Log;
+import android.view.KeyEvent;
 
 import androidx.media.session.MediaButtonReceiver;
+
 
 import com.google.android.exoplayer2.ExoPlayer;
 import com.google.android.exoplayer2.MediaItem;
@@ -100,21 +107,14 @@ public class CarMusicService extends Service {
         dir = new File("/storage/extsd/Music");
         fileList = addFiles(fileList, dir);
 
+
         mediaSession = new MediaSessionCompat(this, "CarMusic");
+        //MediaSessionConnector mediaSessionConnector = new MediaSessionConnector(mediaSession);
+        //mediaSessionConnector.setPlayer(mExoPlayer);
+
         mediaSessionCallbackCompat = new MediaSessionCallbackCompat();
-
-        playbackState = new PlaybackStateCompat.Builder()
-                .setActions(PlaybackStateCompat.ACTION_PLAY |
-                        PlaybackStateCompat.ACTION_SKIP_TO_NEXT |
-                        PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS |
-                        PlaybackStateCompat.ACTION_FAST_FORWARD |
-                        PlaybackStateCompat.ACTION_PAUSE |
-                        PlaybackStateCompat.ACTION_REWIND)
-  //              .setState(PlaybackStateCompat.STATE_PLAYING, PlaybackStateCompat.PLAYBACK_POSITION_UNKNOWN, 1)
-                .build();
-
-        mediaSession.setPlaybackState(playbackState);
         mediaSession.setCallback(mediaSessionCallbackCompat);
+
         mediaSession.setActive(true);
 
         SharedPreferences sharedPref = this.getSharedPreferences("preferences", Context.MODE_PRIVATE);
@@ -149,7 +149,7 @@ public class CarMusicService extends Service {
         filter.addAction("android.media.VOLUME_CHANGED_ACTION");
         filter.addAction("android.media");
         filter.addAction("android.intent.action.MEDIA_BUTTON");
-        registerReceiver(this.broadcastReceiver, filter);
+        //registerReceiver(this.broadcastReceiver, filter);
 
     }
 
@@ -157,7 +157,7 @@ public class CarMusicService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
         Log.i("CarAudioService", "onStartCommand() id " + startId + ": " + intent);
 
-        MediaButtonReceiver.handleIntent(mediaSession, intent);
+//        MediaButtonReceiver.handleIntent(mediaSession, intent);
 
         context = this;
 
@@ -276,6 +276,17 @@ public class CarMusicService extends Service {
 
             // Show music details
             try {
+                playbackState = new PlaybackStateCompat.Builder()
+                        .setActions(PlaybackStateCompat.ACTION_PLAY |
+                                PlaybackStateCompat.ACTION_SKIP_TO_NEXT |
+                                PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS |
+                                PlaybackStateCompat.ACTION_FAST_FORWARD |
+                                PlaybackStateCompat.ACTION_PAUSE |
+                                PlaybackStateCompat.ACTION_REWIND)
+                        .setState(isPaused ? PlaybackStateCompat.STATE_PAUSED : PlaybackStateCompat.STATE_PLAYING, PlaybackStateCompat.PLAYBACK_POSITION_UNKNOWN, 1)
+                        .build();
+                mediaSession.setPlaybackState(playbackState);
+
                 MediaMetadataRetriever metaRetriever = new MediaMetadataRetriever();
                 metaRetriever.setDataSource(fileList.get(mediaIndex).toString());
                 String artist = metaRetriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST);
@@ -311,18 +322,26 @@ public class CarMusicService extends Service {
                 intent.putExtra("artist", artist);
                 intent.putExtra("album", album);
                 intent.putExtra("playing", true);
-                intent.putExtra("package", "com.example.caraudio");
+                intent.putExtra("package", "com.example.carmusic");
                 sendBroadcast(intent);
+
+                // java2s.com/example/java-api/android/support/v4/media/mediametadatacompat/metadata_key_album-0.html
+                MediaMetadataCompat.Builder metadataBuilder = new MediaMetadataCompat.Builder();
+
+                // Get fanart image
+                try {
+                    image = metaRetriever.getEmbeddedPicture();
+                    metadataBuilder.putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, BitmapFactory.decodeByteArray(image, 0, image.length));
+                } catch (Exception e) {
+                }
+
+                metadataBuilder.putString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE, title);
+                metadataBuilder.putString(MediaMetadata.METADATA_KEY_TITLE, title);
+                metadataBuilder.putString(MediaMetadata.METADATA_KEY_ARTIST, artist);
+                metadataBuilder.putString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST, album);
+                mediaSession.setMetadata(metadataBuilder.build());
             } catch (Exception e) {
                 mediaInfo = "File error";
-            }
-
-            // Get fanart image
-            try {
-                MediaMetadataRetriever metaRetriever = new MediaMetadataRetriever();
-                metaRetriever.setDataSource(fileList.get(mediaIndex).toString());
-                image = metaRetriever.getEmbeddedPicture();
-            } catch (Exception e) {
             }
 
             saveState();
@@ -369,40 +388,83 @@ public class CarMusicService extends Service {
     }
 
     private class MediaSessionCallbackCompat extends MediaSessionCompat.Callback {
+        Boolean longPress = false;
         @Override
-        public boolean onMediaButtonEvent(Intent mediaButtonEvent) {
-            Log.d("MyLog", "executing onMediaButtonEvent: " + mediaButtonEvent.getAction());
-            return super.onMediaButtonEvent(mediaButtonEvent);
-        }
+        public boolean onMediaButtonEvent(Intent mediaButtonIntent) {
+            Log.d("MyLog", "executing onMediaButtonEvent: " + mediaButtonIntent.getAction());
+            String action = mediaButtonIntent.getAction();
+            if (Intent.ACTION_MEDIA_BUTTON.equals(action)) {
+                KeyEvent event = mediaButtonIntent.getParcelableExtra(Intent.EXTRA_KEY_EVENT);
+                if (event == null) return false;
+                if (event.getAction() == KeyEvent.ACTION_DOWN && event.isLongPress())
+                {
+                    longPress = true;
+                    if (event.getKeyCode() == KeyEvent.KEYCODE_MEDIA_NEXT) {
+                        // Handle next event
+                        mediaControl(MediaControlAction.nextfolder);
+                        return true; // Indicate that the event is handled
+                    }
+                    if (event.getKeyCode() == KeyEvent.KEYCODE_MEDIA_PREVIOUS) {
+                        // Handle previous event
+                        mediaControl(MediaControlAction.previousfolder);
+                        return true; // Indicate that the event is handled
+                    }
+                }
+                if (event.getAction() == KeyEvent.ACTION_UP)
+                {
+                    if (longPress)
+                    {
+                        longPress = false;
+                        return true;
+                    }
+                    if (event.isLongPress())
+                    {
+                        if (event.getKeyCode() == KeyEvent.KEYCODE_MEDIA_NEXT) {
+                            // Handle next event
+                            mediaControl(MediaControlAction.nextfolder);
+                            return true; // Indicate that the event is handled
+                        }
+                        if (event.getKeyCode() == KeyEvent.KEYCODE_MEDIA_PREVIOUS) {
+                            // Handle previous event
+                            mediaControl(MediaControlAction.previousfolder);
+                            return true; // Indicate that the event is handled
+                        }
+                    }
+                    if (event.getKeyCode() == KeyEvent.KEYCODE_MEDIA_NEXT) {
+                        // Handle next event
+                        mediaControl(MediaControlAction.next);
+                        return true; // Indicate that the event is handled
+                    }
+                    if (event.getKeyCode() == KeyEvent.KEYCODE_MEDIA_PREVIOUS) {
+                        // Handle previous event
+                        mediaControl(MediaControlAction.previous);
+                        return true; // Indicate that the event is handled
+                    }
+                    longPress = false;
+                    if (event.getKeyCode() == KeyEvent.KEYCODE_MEDIA_PLAY) {
+                        // Handle play event
+                        mediaControl(MediaControlAction.play);
+                        return true; // Indicate that the event is handled
+                    }
+                    if (event.getKeyCode() == KeyEvent.KEYCODE_MEDIA_PAUSE) {
+                        // Handle pause event
+                        mediaControl(MediaControlAction.pause);
+                        return true; // Indicate that the event is handled
+                    }
 
-        @Override
-        public void onPlay() {
-            mediaControl(MediaControlAction.play);
-        }
-
-        @Override
-        public void onPause() {
-            mediaControl(MediaControlAction.pause);
-        }
-
-        @Override
-        public void onSkipToPrevious() {
-            mediaControl(MediaControlAction.previous);
-        }
-
-        @Override
-        public void onSkipToNext() {
-            mediaControl(MediaControlAction.next);
-        }
-
-        @Override
-        public void onFastForward() {
-            mediaControl(MediaControlAction.nextfolder);
-        }
-
-        @Override
-        public void onRewind() {
-            mediaControl(MediaControlAction.previousfolder);
+                    if (event.getKeyCode() == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD) {
+                        // Handle fastforward event
+                        mediaControl(MediaControlAction.nextfolder);
+                        return true; // Indicate that the event is handled
+                    }
+                    if (event.getKeyCode() == KeyEvent.KEYCODE_MEDIA_REWIND) {
+                        // Handle rewind event
+                        mediaControl(MediaControlAction.previousfolder);
+                        return true; // Indicate that the event is handled
+                    }
+                }
+            }
+            return super.onMediaButtonEvent(mediaButtonIntent);
         }
 
         @Override
@@ -445,6 +507,8 @@ public class CarMusicService extends Service {
     }
 
     private BroadcastReceiver broadcastReceiver = new BroadcastReceiver() {
+        private long nextPressMS;
+        private long prevPressMS;
         @Override
         public void onReceive(Context context, Intent intent) {
             Log.i("CarMusicService", "message = " + intent.getAction());
@@ -458,8 +522,30 @@ public class CarMusicService extends Service {
                 Log.i("CarMusicService", "command = " + command);
                 if (command == ACTION_PLAY) mediaControl(MediaControlAction.play);
                 if (command == ACTION_PAUSE) mediaControl(MediaControlAction.pause);
-                if (command == ACTION_SKIP_TO_NEXT) mediaControl(MediaControlAction.next);
-                if (command == ACTION_SKIP_TO_PREVIOUS) mediaControl(MediaControlAction.previous);
+                if (command == ACTION_SKIP_TO_NEXT)
+                {
+                    if (nextPressMS > System.currentTimeMillis() - 200)
+                    {
+                        mediaControl(MediaControlAction.next);
+                    }
+                    else
+                    {
+                        mediaControl(MediaControlAction.nextfolder);
+                        nextPressMS = System.currentTimeMillis();
+                    }
+                }
+                if (command == ACTION_SKIP_TO_PREVIOUS)
+                {
+                    if (prevPressMS > System.currentTimeMillis() - 200)
+                    {
+                        mediaControl(MediaControlAction.previousfolder);
+                    }
+                    else
+                    {
+                        mediaControl(MediaControlAction.previous);
+                        prevPressMS = System.currentTimeMillis();
+                    }
+                }
                 if (command == ACTION_FAST_FORWARD) mediaControl(MediaControlAction.nextfolder);
                 if (command == ACTION_REWIND) mediaControl(MediaControlAction.previousfolder);
             }
